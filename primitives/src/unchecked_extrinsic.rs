@@ -461,7 +461,7 @@ where
 			//
 			// 	Ok((tx_gas_price, tx_gas_limit))
 			// }
-			_ => panic!("Couldn't get tx_gas"),
+			_ => Ok((0, 0)),
 		}
 	}
 }
