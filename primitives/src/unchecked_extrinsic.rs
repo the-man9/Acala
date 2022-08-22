@@ -47,7 +47,7 @@ pub struct AcalaUncheckedExtrinsic<
 	CheckPayerTx,
 >(
 	pub UncheckedExtrinsic<Address, Call, AcalaMultiSignature, Extra>,
-	PhantomData<(ConvertEthTx, StorageDepositPerByte, TxFeePerGas, CheckPayerTx)>,
+	pub PhantomData<(ConvertEthTx, StorageDepositPerByte, TxFeePerGas, CheckPayerTx)>,
 );
 
 #[cfg(feature = "std")]
