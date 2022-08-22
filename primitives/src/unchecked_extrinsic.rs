@@ -334,6 +334,138 @@ fn verify_eip712_signature(eth_msg: EthereumTransactionMessage, sig: [u8; 65]) -
 	recover_signer(&sig, &msg_hash)
 }
 
+impl<Call, Extra, ConvertEthTx, StorageDepositPerByte, TxFeePerGas, CheckPayerTx>
+	AcalaUncheckedExtrinsic<Call, Extra, ConvertEthTx, StorageDepositPerByte, TxFeePerGas, CheckPayerTx>
+where
+	Call: Encode + Member,
+	Extra: SignedExtension<AccountId = AccountId32>,
+	ConvertEthTx: Convert<(Call, Extra), Result<(EthereumTransactionMessage, Extra), InvalidTransaction>>,
+	CheckPayerTx: Convert<(Call, Extra), Result<(), InvalidTransaction>>,
+	StorageDepositPerByte: Get<Balance>,
+	TxFeePerGas: Get<Balance>,
+{
+	fn tx_gas(self) -> Result<(u128, u128), TransactionValidityError> {
+		let function = self.0.function.clone();
+		let signature = self.0.signature.clone();
+		if let Some((_, _, extra)) = signature {
+			CheckPayerTx::convert((function.clone(), extra))?;
+		}
+
+		match self.0.signature {
+			Some((addr, AcalaMultiSignature::Ethereum(sig), extra)) => {
+				let (eth_msg, eth_extra) = ConvertEthTx::convert((function.clone(), extra))?;
+				log::info!(
+					target: "evm", "Ethereum eth_msg: {:?}", eth_msg
+				);
+
+				if !eth_msg.tip.is_zero() {
+					// Not yet supported, require zero tip
+					return Err(InvalidTransaction::BadProof.into());
+				}
+
+				if !eth_msg.access_list.len().is_zero() {
+					// Not yet supported, require empty
+					return Err(InvalidTransaction::BadProof.into());
+				}
+
+				let (tx_gas_price, tx_gas_limit) =
+					recover_sign_data(&eth_msg, TxFeePerGas::get(), StorageDepositPerByte::get())
+						.ok_or(InvalidTransaction::BadProof)?;
+
+				// let msg = LegacyTransactionMessage {
+				// 	nonce: eth_msg.nonce.into(),
+				// 	gas_price: tx_gas_price.into(),
+				// 	gas_limit: tx_gas_limit.into(),
+				// 	action: eth_msg.action,
+				// 	value: eth_msg.value.into(),
+				// 	input: eth_msg.input,
+				// 	chain_id: Some(eth_msg.chain_id),
+				// };
+				// log::trace!(
+				// 	target: "evm", "tx msg: {:?}", msg
+				// );
+				//
+				// let msg_hash = msg.hash(); // TODO: consider rewirte this to use `keccak_256` for hashing because
+				// it could be faster
+				//
+				// let signer = recover_signer(&sig,
+				// msg_hash.as_fixed_bytes()).ok_or(InvalidTransaction::BadProof)?;
+				//
+				// let account_id = lookup.lookup(Address::Address20(signer.into()))?;
+				// let expected_account_id = lookup.lookup(addr)?;
+				//
+				// if account_id != expected_account_id {
+				// 	return Err(InvalidTransaction::BadProof.into());
+				// }
+
+				Ok((tx_gas_price, tx_gas_limit))
+			}
+			Some((addr, AcalaMultiSignature::Eip1559(sig), extra)) => {
+				let (eth_msg, eth_extra) = ConvertEthTx::convert((function.clone(), extra))?;
+				log::info!(
+					target: "evm", "Eip1559 eth_msg: {:?}", eth_msg
+				);
+
+				let (tx_gas_price, tx_gas_limit) =
+					recover_sign_data(&eth_msg, TxFeePerGas::get(), StorageDepositPerByte::get())
+						.ok_or(InvalidTransaction::BadProof)?;
+
+				// tip = priority_fee * gas_limit
+				let priority_fee = eth_msg.tip.checked_div(eth_msg.gas_limit.into()).unwrap_or_default();
+				log::info!("priority_fee: {:?}", priority_fee);
+
+				// let msg = EIP1559TransactionMessage {
+				// 	chain_id: eth_msg.chain_id,
+				// 	nonce: eth_msg.nonce.into(),
+				// 	max_priority_fee_per_gas: priority_fee.into(),
+				// 	max_fee_per_gas: tx_gas_price.into(),
+				// 	gas_limit: tx_gas_limit.into(),
+				// 	action: eth_msg.action,
+				// 	value: eth_msg.value.into(),
+				// 	input: eth_msg.input,
+				// 	access_list: eth_msg.access_list,
+				// };
+				// log::trace!(
+				// 	target: "evm", "tx msg: {:?}", msg
+				// );
+				//
+				// let msg_hash = msg.hash(); // TODO: consider rewirte this to use `keccak_256` for hashing because
+				// it could be faster
+				//
+				// let signer = recover_signer(&sig,
+				// msg_hash.as_fixed_bytes()).ok_or(InvalidTransaction::BadProof)?;
+				//
+				// let account_id = lookup.lookup(Address::Address20(signer.into()))?;
+				// let expected_account_id = lookup.lookup(addr)?;
+				//
+				// if account_id != expected_account_id {
+				// 	return Err(InvalidTransaction::BadProof.into());
+				// }
+
+				Ok((tx_gas_price, tx_gas_limit))
+			}
+			// Some((addr, AcalaMultiSignature::AcalaEip712(sig), extra)) => {
+			// 	let (eth_msg, eth_extra) = ConvertEthTx::convert((function.clone(), extra))?;
+			// 	log::trace!(
+			// 		target: "evm", "AcalaEip712 eth_msg: {:?}", eth_msg
+			// 	);
+			//
+			// 	let signer = verify_eip712_signature(eth_msg, sig).ok_or(InvalidTransaction::BadProof)?;
+			//
+			// 	let account_id = lookup.lookup(Address::Address20(signer.into()))?;
+			// 	let expected_account_id = lookup.lookup(addr)?;
+			//
+			// 	if account_id != expected_account_id {
+			// 		return Err(InvalidTransaction::BadProof.into());
+			// 	}
+			//
+			// 	Ok((tx_gas_price, tx_gas_limit))
+			// }
+			_ => panic!("Couldn't get tx_gas"),
+		}
+	}
+}
+
 fn recover_sign_data(
 	eth_msg: &EthereumTransactionMessage,
 	ts_fee_per_gas: u128,
