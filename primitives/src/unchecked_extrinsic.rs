@@ -344,7 +344,7 @@ where
 	StorageDepositPerByte: Get<Balance>,
 	TxFeePerGas: Get<Balance>,
 {
-	fn tx_gas(self) -> Result<(u128, u128), TransactionValidityError> {
+	pub fn tx_gas(self) -> Result<(u128, u128), TransactionValidityError> {
 		let function = self.0.function.clone();
 		let signature = self.0.signature.clone();
 		if let Some((_, _, extra)) = signature {
