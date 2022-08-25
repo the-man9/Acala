@@ -736,7 +736,7 @@ where
 
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
-			let multiplier = 1000000000000u128;
+			let multiplier = Multiplier::saturating_from_integer(1);
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
