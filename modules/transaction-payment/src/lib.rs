@@ -1185,7 +1185,7 @@ where
 	/// `tip * (max_block_{weight|length} / bounded_{weight|length})`, since given current
 	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
 	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
-	fn get_priority(
+	pub fn get_priority(
 		info: &DispatchInfoOf<CallOf<T>>,
 		len: usize,
 		tip: PalletBalanceOf<T>,
